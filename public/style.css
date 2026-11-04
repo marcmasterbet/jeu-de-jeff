@@ -105,3 +105,43 @@ body.flash .now{animation:flash 1.2s ease-out}
 .tn{font-weight:900;font-size:20px;color:var(--acc);margin-bottom:4px}
 .set{max-width:560px} .set .row label{flex:1} .set h3{font-size:15px;margin:18px 0 6px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:12px;z-index:9;max-width:90vw}
+/* écran d'attente */
+.badge-me{padding:22px 20px}
+.badge-me .me-name{font-size:30px;font-weight:900;letter-spacing:-.02em;margin-top:8px;line-height:1.15}
+.livecount{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.livecount b{font-size:56px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:var(--acc)}
+.livecount span{font-size:17px;font-weight:600;line-height:1.3}
+.route li.wait{color:var(--muted)} .route li.wait i{font-style:normal;display:inline-block;min-width:26px;text-align:center;background:var(--bg);border-radius:6px}
+.steps{margin:0 0 10px;padding-left:20px;line-height:1.5;font-size:16px} .steps li{margin-bottom:8px}
+
+/* ===== Identité Café 100 % Pro Bayonne ===== */
+:root{--ink:#1d1a18;--ink2:#4a4440;--muted:#857c75;--line:#ece4dc;--bg:#f7f2ec;--acc:#b8202a;--acc2:#961a22;--ok:#0b7a3e;--serif:Georgia,"Iowan Old Style","Times New Roman",serif}
+body.p{background:radial-gradient(120% 60% at 50% -10%,#fbe9e4 0%,var(--bg) 60%) fixed}
+h1,h2,.now .tbl,.bigcount b,.livecount b{font-family:var(--serif)}
+.top{gap:10px;justify-content:flex-start}
+.top .logo{width:46px;height:40px;object-fit:cover;border-radius:6px;flex:none}
+.top .ev{display:flex;flex-direction:column;line-height:1.2;flex:1;min-width:0}
+.top .ev b{font-size:14px} .top .ev span{font-size:12px;color:var(--muted)}
+.top .who{background:#fff;border:1px solid var(--line);border-radius:20px;padding:4px 10px;font-weight:700;color:var(--acc);font-size:14px}
+.intro{text-align:center;padding:10px 4px 18px}
+.intro h1{font-size:32px;line-height:1.1;margin:6px 0 12px;letter-spacing:-.01em}
+.intro h1 em{color:var(--acc);font-weight:400}
+.facts{color:var(--ink2);font-size:14px;margin:0}
+.jeff{display:flex;gap:14px;align-items:center;text-align:left;margin-bottom:16px}
+.jeff img{width:68px;height:68px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 0 0 3px #fff,0 0 0 5px var(--acc)}
+.jeff p{margin:0;font-size:16px;line-height:1.45;background:var(--bg);padding:12px 14px;border-radius:4px 16px 16px 16px}
+.now{background:var(--ink)} .now.ready{background:var(--acc)} .now.done{background:var(--ok)}
+.tgrid8{list-style:none;padding:0;margin:4px 0 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tgrid8 li{border:1.5px solid var(--line);border-radius:14px;text-align:center;padding:10px 4px;background:#fff}
+.tgrid8 small{display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tgrid8 b{display:block;font-family:var(--serif);font-size:30px;line-height:1.15;margin:2px 0}
+.tgrid8 li.cur{border-color:var(--acc);background:#fdf1ef} .tgrid8 li.cur b{color:var(--acc)}
+.tgrid8 li.past{opacity:.4} .tgrid8 li.wait b{color:#d3c9c0}
+.btn{background:var(--acc)} .btn:hover{background:var(--acc2)}
+.abar{background:var(--ink)} .abar .logo{height:30px;border-radius:4px;vertical-align:middle;margin-right:8px}
+.qrhead{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:14px}
+.qrhead img{height:56px;border-radius:6px} .qrhead div{text-align:left;line-height:1.25} .qrhead b{font-family:var(--serif);font-size:20px;display:block}
+.jeffcall{display:flex;align-items:center;gap:12px;margin-top:14px;justify-content:center}
+.jeffcall img{width:54px;height:54px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 3px #fff,0 0 0 5px var(--acc)}
+.pill.open{background:var(--ok)} .pill.closed{background:var(--acc)} .badge{background:var(--acc)}
+.tn{color:var(--acc)} .curt{background:var(--acc)} .clock.late{color:var(--acc)}

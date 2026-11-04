@@ -15,7 +15,8 @@ const PUB = path.join(__dirname, 'public');
 
 // ---------- état ----------
 const fresh = () => ({
-  eventName: 'Speed meeting',
+  eventName: 'Café 100 % Pro Bayonne',
+  eventDate: 'Jeudi 12 novembre 2026',
   rounds: 8,
   minutes: 15,
   status: 'open',          // open | closed (parcours générés) | done
@@ -44,7 +45,7 @@ const active = () => S.participants.filter(p => p.active);
 // ---------- calcul des parcours ----------
 // Les tours déjà joués (1..currentRound) sont conservés ; on recalcule les suivants pour les présents.
 function computePlan() {
-  const ppl = active();
+  const ppl = active().sort((a, b) => a.num - b.num);   // ordre d'arrivée
   const fixed = S.currentRound;                // tours figés
   const remaining = S.rounds - fixed;
   const idx = new Map(ppl.map((p, i) => [p.id, i]));
@@ -62,8 +63,9 @@ function computePlan() {
     }
     for (const t in byTable) { const g = byTable[t]; for (let a = 0; a < g.length; a++) for (let b = a + 1; b < g.length; b++) history.push([g[a], g[b]]); }
   }
-  const res = schedule(ppl.length, remaining, { history, timeMs: 3000, seed: Date.now() & 0xffffff });
-  const nums = numberTables(res.groups, res.sizes, visits);
+  const byArrival = fixed === 0;                // tour 1 = ordre d'arrivée
+  const res = schedule(ppl.length, remaining, { history, byArrival, timeMs: 3000, seed: Date.now() & 0xffffff });
+  const nums = numberTables(res.groups, res.sizes, visits, byArrival);
   const newPlan = {};
   for (const p of S.participants) {
     const arr = (S.plan[p.id] || []).slice(0, fixed);
@@ -92,24 +94,30 @@ function computeStats() {
 
 // ---------- vues ----------
 function publicState() {
-  return { eventName: S.eventName, rounds: S.rounds, minutes: S.minutes, status: S.status, reopened: !!S.reopened, currentRound: S.currentRound, roundStartedAt: S.roundStartedAt, now: Date.now() };
+  return { eventName: S.eventName, eventDate: S.eventDate || '', rounds: S.rounds, minutes: S.minutes, status: S.status, reopened: !!S.reopened, currentRound: S.currentRound, roundStartedAt: S.roundStartedAt, now: Date.now() };
 }
 function meView(p) {
   const v = Object.assign(publicState(), { known: !!p });
   if (!p) return v;
-  v.name = p.name; v.company = p.company; v.active = p.active;
+  v.num = p.num; v.active = p.active;
+  // table du tour 1 connue dès l'arrivée : n°1 à 4 → table 1, n°5 à 8 → table 2…
+  const rank = active().sort((a, b) => a.num - b.num).findIndex(q => q.id === p.id);
+  v.firstTable = rank < 0 ? null : Math.floor(rank / 4) + 1;
+  v.count = active().length;
+  v.rank = S.participants.indexOf(p) + 1;
   v.plan = S.status !== 'open' && S.plan[p.id] ? S.plan[p.id] : null;
   // co-tables du tour en cours (prénoms) pour se retrouver
   if (v.plan && S.currentRound >= 1) {
     const t = v.plan[S.currentRound - 1];
-    v.mates = t == null ? [] : active().filter(q => q.id !== p.id && S.plan[q.id] && S.plan[q.id][S.currentRound - 1] === t).map(q => q.name + (q.company ? ' · ' + q.company : ''));
+    v.mates = null;
   }
   return v;
 }
 function adminView() {
   return Object.assign(publicState(), {
     dirty: !!S.dirty,
-    participants: S.participants.map(p => ({ id: p.id, name: p.name, company: p.company, active: p.active, joinedAt: p.joinedAt, plan: S.plan[p.id] || null })),
+    lastAdded: S.lastAdded || null,
+    participants: S.participants.map(p => ({ id: p.id, num: p.num, name: p.name, company: p.company, active: p.active, joinedAt: p.joinedAt, plan: S.plan[p.id] || null })),
     stats: S.stats,
   });
 }
@@ -118,8 +126,9 @@ function adminView() {
 function adminAction(b) {
   switch (b.action) {
     case 'settings':
-      if (S.currentRound > 0) throw new Error('Impossible de modifier les réglages pendant l’événement.');
       if (b.eventName != null) S.eventName = norm(b.eventName) || S.eventName;
+      if (b.eventDate != null) S.eventDate = norm(b.eventDate);
+      if (S.currentRound > 0) break;            // tours et durée verrouillés pendant l'événement
       if (b.rounds) S.rounds = Math.max(1, Math.min(12, b.rounds | 0));
       if (b.minutes) S.minutes = Math.max(1, Math.min(60, b.minutes | 0));
       if (S.status === 'closed') computePlan();
@@ -149,24 +158,24 @@ function adminAction(b) {
     }
     case 'delete': S.participants = S.participants.filter(x => x.id !== b.id); delete S.plan[b.id]; if (S.status !== 'open') S.dirty = true; break;
     case 'add': {                       // inscription faite par Jeff (téléphone oublié…)
-      const name = norm(b.name); if (!name) throw new Error('Nom manquant.');
-      addParticipant(name, norm(b.company)); if (S.status !== 'open') S.dirty = true; break;
+      S.lastAdded = addParticipant().num; if (S.status !== 'open') S.dirty = true; break;
     }
     case 'reset': {
-      const keep = { eventName: S.eventName, rounds: S.rounds, minutes: S.minutes };
+      const keep = { eventName: S.eventName, eventDate: S.eventDate, rounds: S.rounds, minutes: S.minutes };
       S = Object.assign(fresh(), keep); break;
     }
     case 'demo': {                      // remplit avec des faux participants pour tester
       const n = Math.max(2, Math.min(120, b.n | 0));
-      for (let i = 1; i <= n; i++) addParticipant('Participant ' + String(i).padStart(2, '0'), 'Test');
+      for (let i = 1; i <= n; i++) addParticipant();
       break;
     }
     default: throw new Error('Action inconnue.');
   }
   save();
 }
-function addParticipant(name, company) {
-  const p = { id: crypto.randomBytes(6).toString('hex'), token: crypto.randomBytes(16).toString('hex'), name, company, active: true, joinedAt: Date.now() };
+function addParticipant() {
+  const num = S.participants.reduce((m, x) => Math.max(m, x.num || 0), 0) + 1;
+  const p = { id: crypto.randomBytes(6).toString('hex'), token: crypto.randomBytes(16).toString('hex'), num, name: 'n°' + num, company: '', active: true, joinedAt: Date.now() };
   S.participants.push(p);
   return p;
 }
@@ -179,7 +188,7 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
 function readBody(req) {
   return new Promise((ok, ko) => { let d = ''; req.on('data', c => { d += c; if (d.length > 1e5) req.destroy(); }); req.on('end', () => { try { ok(d ? JSON.parse(d) : {}); } catch (e) { ko(e); } }); });
 }
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+const MIME = { '.jpg': 'image/jpeg', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -192,13 +201,15 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/join' && req.method === 'POST') {
       const b = await readBody(req);
-      const name = norm(b.name), company = norm(b.company);
-      if (name.length < 2) return send(res, 400, { error: 'Indiquez votre prénom et votre nom.' });
-      // même nom déjà inscrit → on rend son parcours (téléphone changé, page fermée…)
-      const existing = S.participants.find(x => key(x.name) === key(name) && key(x.company) === key(company));
-      if (existing) { if (!existing.active && S.status !== 'open') S.dirty = true; existing.active = true; save(); return send(res, 200, { token: existing.token }); }
+      // « J'ai déjà un numéro » : retrouver son parcours après avoir fermé la page
+      if (b.num != null) {
+        const ex = S.participants.find(x => x.num === (b.num | 0));
+        if (!ex) return send(res, 404, { error: 'Numéro inconnu.' });
+        if (!ex.active && S.status !== 'open') S.dirty = true;
+        ex.active = true; save(); return send(res, 200, { token: ex.token });
+      }
       if (S.status !== 'open' && !S.reopened) return send(res, 403, { error: 'Les inscriptions sont closes. Signalez-vous à Jeff, il peut vous ajouter.' });
-      const np = addParticipant(name, company); if (S.status !== 'open') S.dirty = true; save();
+      const np = addParticipant(); if (S.status !== 'open') S.dirty = true; save();
       return send(res, 200, { token: np.token });
     }
     if (p === '/api/admin') {

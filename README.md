@@ -1,7 +1,8 @@
 # Speed meeting — parcours de tables sur smartphone
 
-Un seul QR code pour tout le monde. Chaque participant confirme sa présence sur son téléphone
-(navigateur, aucune application), puis reçoit son parcours personnel : une table par tour.
+Un seul QR code pour tout le monde. Chaque participant appuie sur « Je suis présent·e » (aucun nom
+à saisir, aucune application) et reçoit un numéro d'arrivée. Le tour 1 suit l'ordre d'arrivée :
+n°1 à 4 → table 1, n°5 à 8 → table 2… À la clôture, il reçoit les tables des tours 2 à 8.
 Jeff pilote tout depuis une seule page.
 
 ## Résultat de l'algorithme (8 tours, tables de 4)
@@ -13,10 +14,11 @@ Jeff pilote tout depuis une seule page.
 | 52 | 13 | 24 | 0 |
 | 64 | 16 | 24 | 0 |
 
+- Le tour 1 (ordre d'arrivée) est imposé ; les 7 autres sont optimisés autour de lui.
+  S'il reste 1 ou 2 personnes à la fin, les derniers arrivés complètent les tables 1 et 2.
 - 28 est le cas le plus serré (24 rencontres sur 27 possibles) : on part d'une solution exacte
   connue, mélangée au hasard à chaque événement.
 - Effectif non multiple de 4 : quelques tables de 5 (reste 1 ou 2) ou une table de 3 (reste 3).
-  De 25 à 27 participants : zéro doublon garanti (tables de 4 et de 3).
 - Le numéro de table change aussi d'un tour à l'autre autant que possible.
 
 ## Mise en ligne (une seule fois, ~10 minutes)
@@ -47,15 +49,15 @@ Test en local : `ADMIN_CODE=test node server.js` puis http://localhost:3000 et h
    et apparaissent aussitôt sur tous les téléphones.
 4. **« Lancer le tour 1 »**, puis toutes les 15 minutes **« Changement de table »**.
    Le chrono est affiché en grand ; un bip retentit à la fin du temps. Les téléphones
-   vibrent et affichent la nouvelle table, avec les noms des voisins de table.
+   vibrent et affichent la nouvelle table.
 
 ### Imprévus
 - **Retardataire** : bouton *Accepter un retardataire* → il scanne le QR → *Mettre à jour les parcours*.
-- **Quelqu'un sans téléphone** : onglet *Participants* → *Ajouter* ; son parcours est dans la liste
-  et dans l'onglet *Tables*.
+- **Quelqu'un sans téléphone** : onglet *Participants* → *Ajouter un participant* ; Jeff lui donne
+  son numéro, son parcours est dans la liste et dans l'onglet *Tables*.
 - **Quelqu'un part** : *Participants* → *Absent* → *Mettre à jour les parcours*.
   Les tours déjà joués ne bougent jamais ; seuls les suivants sont recalculés, sans doublons.
-- **Téléphone fermé ou changé** : il suffit de rescanner et de saisir le même nom.
+- **Téléphone fermé ou changé** : rescanner → « J'ai déjà un numéro » → saisir son numéro.
 - **Personne perdue** : onglet *Tables* → qui est assis où, tour par tour.
 
 ## Fichiers

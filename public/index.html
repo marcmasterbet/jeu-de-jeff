@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#14213d">
-<title>Mon parcours</title>
+<meta name="theme-color" content="#b8202a">
+<title>Mon parcours · Café 100 % Pro</title>
+<link rel="icon" href="/logo-carre.jpg">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="p">
@@ -29,45 +30,69 @@ async function api(url, body) {
 }
 
 function header(s) {
-  return `<header class="top"><span class="brand">${esc(s.eventName)}</span>${s.name ? `<span class="who">${esc(s.name)}</span>` : ''}</header>`;
+  return `<header class="top"><img class="logo" src="/logo-carre.jpg" alt="Café 100 % Pro">
+    <div class="ev"><b>${esc(s.eventName)}</b><span>${esc(s.eventDate || '')}</span></div>
+    ${s.num ? `<span class="who">n°${s.num}</span>` : ''}</header>`;
+}
+const jeff = txt => `<div class="jeff"><img src="/jeff.jpg" alt="Jeff"><p>${txt}</p></div>`;
+
+function renderJoin(s, err, recover) {
+  const closed = s.status !== 'open' && !s.reopened;
+  app.innerHTML = header(s) + (recover ? `
+    <section class="card hero">
+      <h1>Retrouver mon parcours</h1>
+      <p class="lead">Saisis le numéro qui s'était affiché sur ton téléphone.</p>
+      <form id="rf"><label>Mon numéro<input name="num" type="number" inputmode="numeric" min="1" required placeholder="17"></label>
+        ${err ? `<p class="err">${esc(err)}</p>` : ''}
+        <button class="btn big">Retrouver mon parcours</button></form>
+    </section>
+    <p class="foot"><button class="link" id="back">Retour</button></p>` : `
+    <section class="intro">
+      <h1>Une place à chaque table.<br><em>De belles rencontres à la clé.</em></h1>
+      <p class="facts"><b>${s.rounds}</b> tours de ${s.minutes} min · tables de <b>4</b> · jusqu'à <b>${s.rounds * 3}</b> rencontres</p>
+    </section>
+    <section class="card hero center">
+      ${jeff(closed ? 'Les inscriptions sont closes. Viens me voir, je t’ajoute en un clic.' : 'Bienvenue&nbsp;! Un clic et tu sais où t’asseoir. Pas de nom, pas d’inscription, pas de papier.')}
+      ${err ? `<p class="err">${esc(err)}</p>` : ''}
+      ${closed ? '' : `<button class="btn big" id="go">Je suis là — obtenir ma table</button>`}
+    </section>
+    <p class="foot"><button class="link" id="rec">J'ai déjà un numéro</button></p>`);
+  const ok = r => { token = r.token; try { localStorage.setItem(TK, token); } catch {} if (navigator.vibrate) navigator.vibrate(30); last = null; refresh(); };
+  if ($('#go')) $('#go').onclick = async e => { e.target.disabled = true; try { ok(await api('/api/join', {})); } catch (er) { renderJoin(s, er.message); } };
+  if ($('#rec')) $('#rec').onclick = () => renderJoin(s, null, true);
+  if ($('#back')) $('#back').onclick = () => renderJoin(s);
+  if ($('#rf')) $('#rf').onsubmit = async e => { e.preventDefault(); try { ok(await api('/api/join', { num: +new FormData(e.target).get('num') })); } catch (er) { renderJoin(s, er.message, true); } };
 }
 
-function renderJoin(s, err) {
-  app.innerHTML = header(s) + `
-    <section class="card hero">
-      <h1>Bienvenue&nbsp;!</h1>
-      <p class="lead">Confirmez votre présence pour recevoir votre parcours de tables.</p>
-      ${s.status !== 'open' && !s.reopened ? `<p class="warn">Les inscriptions sont closes. Si vous étiez déjà inscrit·e, saisissez le même nom pour retrouver votre parcours.</p>` : ''}
-      <form id="f" autocomplete="on">
-        <label>Prénom et nom<input name="name" required minlength="2" autocomplete="name" placeholder="Camille Martin"></label>
-        <label>Entreprise <span class="opt">(facultatif)</span><input name="company" autocomplete="organization" placeholder="Votre société"></label>
-        ${err ? `<p class="err">${esc(err)}</p>` : ''}
-        <button class="btn big" type="submit">Je confirme ma présence</button>
-      </form>
-    </section>`;
-  $('#f').onsubmit = async e => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    e.target.querySelector('button').disabled = true;
-    try {
-      const r = await api('/api/join', { name: fd.get('name'), company: fd.get('company') });
-      token = r.token; try { localStorage.setItem(TK, token); } catch {}
-      if (navigator.vibrate) navigator.vibrate(30);
-      refresh();
-    } catch (er) { renderJoin(s, er.message); }
-  };
+function grid(s, plan, cr) {
+  return `<ol class="tgrid8">${Array.from({ length: s.rounds }, (_, i) => {
+    const t = plan ? plan[i] : (i === 0 ? s.firstTable : null), n = i + 1;
+    const cls = cr ? (n < cr ? 'past' : n === cr ? 'cur' : '') : (n === 1 ? 'cur' : '');
+    return `<li class="${cls} ${t == null ? 'wait' : ''}"><small>Tour ${n}</small><b>${t == null ? '?' : t}</b><small>table</small></li>`;
+  }).join('')}</ol>`;
 }
 
 function renderWaiting(s) {
+  const n = s.count || 1, meets = Math.min(s.rounds * 3, n - 1);
   app.innerHTML = header(s) + `
-    <section class="card hero center">
-      <div class="check">✓</div>
-      <h1>C'est noté, ${esc(s.name.split(' ')[0])}&nbsp;!</h1>
-      <p class="lead">Votre présence est confirmée. Votre parcours s'affichera ici dès que Jeff aura clôturé les inscriptions.</p>
-      <p class="muted pulse">Gardez cette page ouverte</p>
+    <section class="now ready">
+      <div class="lbl">✓ C'est noté · participant n°${s.num}</div>
+      <div class="tbl"><small>Installe-toi table</small>${s.firstTable ?? '–'}</div>
+      <div class="sub">C'est ta table du tour 1. Tes tables suivantes arrivent ici dès que Jeff clôture les inscriptions.</div>
     </section>
-    <p class="foot"><button class="link" id="notme">Ce n'est pas moi</button></p>`;
-  $('#notme').onclick = forget;
+    <section class="card live">
+      <div class="livecount"><b>${n}</b><span>présent${n > 1 ? 's' : ''} pour l'instant<br><small class="muted">mis à jour en direct</small></span></div>
+      <p class="muted small">Jusqu'à <b>${meets} rencontres</b> différentes pour toi.</p>
+    </section>
+    <section class="card">
+      <h2>Mes ${s.rounds} tables</h2>
+      ${grid(s, null, 0)}
+      <p class="muted small pulse">En attente de la clôture…</p>
+    </section>
+    <section class="card">
+      ${jeff(`Toutes les ${s.minutes} minutes, je donne le signal&nbsp;: ton téléphone vibre et t’indique ta nouvelle table. Garde cette page ouverte&nbsp;!`)}
+      <p class="muted small">Page fermée par erreur&nbsp;? Rescanne le QR code → « J'ai déjà un numéro » → <b>n°${s.num}</b>.</p>
+    </section>`;
 }
 
 function fmt(ms) { ms = Math.max(0, ms); const m = Math.floor(ms / 60000), s = Math.floor(ms / 1000) % 60; return `${m}:${String(s).padStart(2, '0')}`; }
@@ -75,32 +100,27 @@ function fmt(ms) { ms = Math.max(0, ms); const m = Math.floor(ms / 60000), s = M
 function renderPlan(s) {
   const cr = s.currentRound, plan = s.plan, R = s.rounds;
   if (!s.active && cr > 0) {
-    app.innerHTML = header(s) + `<section class="card hero center"><h1>Vous êtes noté·e absent·e</h1><p class="lead">Si vous êtes bien là, signalez-vous à Jeff : il vous réintègre en un clic.</p></section>`;
+    app.innerHTML = header(s) + `<section class="card hero center">${jeff('Tu es noté·e absent·e. Si tu es bien là, viens me voir&nbsp;: je te réintègre en un clic.')}</section>`;
     return;
   }
   let main;
   if (s.status === 'done' || cr > R) {
-    main = `<section class="now done"><div class="lbl">C'est terminé</div><div class="sub">Merci pour votre participation&nbsp;!</div></section>`;
+    main = `<section class="now done"><div class="lbl">C'est terminé&nbsp;!</div><div class="sub">Merci d'être venu·e. À très vite au Café 100 % Pro.</div></section>`;
   } else if (cr === 0) {
     const t = plan[0];
-    main = `<section class="now ready"><div class="lbl">Premier tour</div><div class="tbl"><small>Table</small>${t ?? '–'}</div><div class="sub">Installez-vous dès que Jeff lance le tour&nbsp;1.</div></section>`;
+    main = `<section class="now ready"><div class="lbl">Premier tour</div><div class="tbl"><small>Table</small>${t ?? '–'}</div><div class="sub">Reste à cette table : Jeff va lancer le tour&nbsp;1.</div></section>`;
   } else {
     const t = plan[cr - 1], next = cr < R ? plan[cr] : null;
     main = `<section class="now">
       <div class="lbl">Tour ${cr} <span>/ ${R}</span></div>
       <div class="tbl"><small>Table</small>${t ?? '–'}</div>
       <div class="timer" id="timer"></div>
-      ${s.mates && s.mates.length ? `<div class="mates"><b>Avec vous&nbsp;:</b> ${s.mates.map(esc).join(', ')}</div>` : ''}
       ${next != null ? `<div class="next">Tour suivant&nbsp;: <b>table ${next}</b></div>` : cr === R ? `<div class="next">Dernier tour</div>` : ''}
     </section>`;
   }
-  const rows = plan.map((t, i) => {
-    const n = i + 1, cls = cr === 0 ? '' : n < cr ? 'past' : n === cr ? 'cur' : '';
-    return `<li class="${cls}"><span>Tour ${n}</span><b>${t == null ? '—' : 'Table ' + t}</b></li>`;
-  }).join('');
   app.innerHTML = header(s) + main + `
-    <section class="card"><h2>Mon parcours</h2><ol class="route">${rows}</ol>
-    <p class="muted small">Toutes les ${s.minutes} minutes, Jeff annonce le changement : regardez votre téléphone et rejoignez la table suivante.</p></section>`;
+    <section class="card"><h2>Mes ${R} tables</h2>${grid(s, plan, cr)}
+    <p class="muted small">Toutes les ${s.minutes} minutes, Jeff donne le signal&nbsp;: regarde ton téléphone et rejoins ta table suivante.</p></section>`;
   tick();
 }
 
@@ -131,12 +151,13 @@ async function refresh() {
     const s = await api('/api/me' + (token ? '?t=' + encodeURIComponent(token) : ''));
     offset = s.now - Date.now();
     if (token && !s.known) { token = null; try { localStorage.removeItem(TK); } catch {} }
-    const sig = JSON.stringify([s.status, s.currentRound, s.roundStartedAt, s.plan, s.active, s.mates, s.reopened, s.known]);
+    const sig = JSON.stringify([s.status, s.currentRound, s.roundStartedAt, s.plan, s.active, s.mates, s.reopened, s.known, s.count, s.num, s.firstTable]);
     if (lastRound !== null && s.currentRound !== lastRound) flash();
+    if (last && last.known && !last.plan && s.plan) flash();   // le parcours vient d'arriver
     lastRound = s.currentRound;
     const changed = !last || sig !== last._sig;
     s._sig = sig; last = s;
-    if (!changed && app.querySelector('form')) return;  // ne pas effacer la saisie en cours
+    if (app.querySelector('#rf') && !s.known) return;  // ne pas effacer la saisie en cours
     if (!changed) return;
     if (!s.known) renderJoin(s);
     else if (!s.plan) renderWaiting(s);

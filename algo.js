@@ -24,6 +24,18 @@ const T28 = [
   [[0,12,17,22],[1,13,18,23],[2,7,19,24],[3,8,20,25],[4,9,14,26],[5,10,15,27],[6,11,16,21]],
 ];
 
+// Tour 1 par ordre d'arrivée : tables de 4 dans l'ordre ; s'il reste 1 ou 2 personnes,
+// elles complètent les premières tables (tables de 5) ; s'il en reste 3, elles forment la dernière table.
+function arrivalGroups(n) {
+  const sizes = tableSizes(n), G = sizes.length, T = Math.floor(n / 4), r = n % 4;
+  if (G === 1) return [[...Array(n).keys()]];
+  const g = [];
+  for (let t = 0; t < T; t++) g.push([4 * t, 4 * t + 1, 4 * t + 2, 4 * t + 3]);
+  if (r === 3) g.push([4 * T, 4 * T + 1, 4 * T + 2]);
+  else for (let i = 0; i < r; i++) g[i].push(4 * T + i);
+  return g;
+}
+
 function rng(seed) { // PRNG déterministe (mulberry32)
   let a = seed >>> 0;
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -44,7 +56,7 @@ function schedule(n, rounds, opts = {}) {
 
   // 25 à 27 participants : on reprend la solution exacte à 28 avec des « places vides »
   // (choisies pour ne jamais tomber à la même table) → tables de 4 ou 3, zéro doublon.
-  if (n >= 25 && n < 28 && rounds <= 8 && !(opts.history && opts.history.length)) {
+  if (n >= 25 && n < 28 && rounds <= 8 && !opts.byArrival && !(opts.history && opts.history.length)) {
     const metT = (a, b) => T28.slice(0, rounds).some(rd => rd.some(g => g.includes(a) && g.includes(b)));
     const ghosts = [];
     for (let c = 27; c >= 0 && ghosts.length < 28 - n; c--) if (ghosts.every(g => !metT(g, c))) ghosts.push(c);
@@ -66,12 +78,20 @@ function schedule(n, rounds, opts = {}) {
   const asg = [], mem = [];
   // 28 participants : cas le plus serré (24 rencontres sur 27 possibles). On part d'une solution
   // exacte connue (8 tours, zéro doublon), puis on mélange les identités au hasard.
+  // byArrival : le tour 1 suit l'ordre d'arrivée (n°1 à 4 → table 1, n°5 à 8 → table 2…)
+  // et n'est jamais modifié ; seuls les tours suivants sont optimisés.
+  const first = opts.byArrival ? arrivalGroups(n) : null;
   const useT28 = n === 28 && rounds <= 8 && !(opts.history && opts.history.length);
-  const labels = [...Array(n).keys()];
+  let labels = [...Array(n).keys()];
   for (let i = n - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [labels[i], labels[j]] = [labels[j], labels[i]]; }
+  if (useT28 && first) { // on renomme la solution exacte pour que son tour 1 = les tables d'arrivée
+    labels = new Array(28);
+    T28[0].forEach((grp, g) => { const pos = [0, 1, 2, 3].sort(() => rand() - .5); grp.forEach((x, k) => labels[x] = first[g][pos[k]]); });
+  }
   for (let r = 0; r < rounds; r++) {
     let perm = [...Array(n).keys()];
     if (useT28) perm = T28[r].flat().map(x => labels[x]);
+    else if (first && r === 0) perm = first.flat();
     else for (let i = n - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
     const a = new Int16Array(n), m = sizes.map(() => []);
     let k = 0;
@@ -110,7 +130,8 @@ function schedule(n, rounds, opts = {}) {
       T *= 0.97; if (T < 0.08) T = 0.6;           // réchauffes périodiques
     }
     let r, a, tries = 0;
-    do { r = Math.floor(rand() * rounds); a = Math.floor(rand() * n); } while (!hasConflict(r, a) && ++tries < 30);
+    const r0 = first ? 1 : 0; if (rounds <= r0) break;
+    do { r = r0 + Math.floor(rand() * (rounds - r0)); a = Math.floor(rand() * n); } while (!hasConflict(r, a) && ++tries < 30);
     const b = Math.floor(rand() * n);
     if (asg[r][a] === asg[r][b]) continue;
     const d = delta(r, a, b);
@@ -125,10 +146,11 @@ function schedule(n, rounds, opts = {}) {
 
 // Numérotation des tables pour chaque tour : on évite qu'une personne retourne à la même table.
 // Seuls les groupes de même taille sont permutés entre eux (une table de 5 reste une table de 5).
-function numberTables(groups, sizes, prevVisits /* Map p -> Set(table) */) {
+function numberTables(groups, sizes, prevVisits /* Map p -> Set(table) */, keepFirst) {
   const visits = prevVisits || new Map();
   const out = [];
-  for (const round of groups) {
+  for (const [ri, round] of groups.entries()) {
+    if (keepFirst && ri === 0) { round.forEach((grp, g) => grp.forEach(p => { if (!visits.has(p)) visits.set(p, new Set()); visits.get(p).add(g); })); out.push(round.map((_, g) => g + 1)); continue; }
     const tableOf = new Array(round.length);
     const bySize = {};
     sizes.forEach((s, g) => (bySize[s] = bySize[s] || []).push(g));
@@ -156,4 +178,4 @@ function numberTables(groups, sizes, prevVisits /* Map p -> Set(table) */) {
   return out;
 }
 
-module.exports = { schedule, tableSizes, numberTables };
+module.exports = { schedule, tableSizes, numberTables, arrivalGroups };

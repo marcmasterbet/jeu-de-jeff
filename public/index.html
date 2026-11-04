@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14213d">
+<title>Mon parcours</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="p">
+<main id="app" class="wrap">
+  <div class="loading">Chargement…</div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const TK = 'sm_token';
+let token = null, last = null, offset = 0, lastRound = null, timerId = null, wake = null;
+try { token = localStorage.getItem(TK); } catch {}
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function api(url, body) {
+  const r = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Erreur réseau');
+  return j;
+}
+
+function header(s) {
+  return `<header class="top"><span class="brand">${esc(s.eventName)}</span>${s.name ? `<span class="who">${esc(s.name)}</span>` : ''}</header>`;
+}
+
+function renderJoin(s, err) {
+  app.innerHTML = header(s) + `
+    <section class="card hero">
+      <h1>Bienvenue&nbsp;!</h1>
+      <p class="lead">Confirmez votre présence pour recevoir votre parcours de tables.</p>
+      ${s.status !== 'open' && !s.reopened ? `<p class="warn">Les inscriptions sont closes. Si vous étiez déjà inscrit·e, saisissez le même nom pour retrouver votre parcours.</p>` : ''}
+      <form id="f" autocomplete="on">
+        <label>Prénom et nom<input name="name" required minlength="2" autocomplete="name" placeholder="Camille Martin"></label>
+        <label>Entreprise <span class="opt">(facultatif)</span><input name="company" autocomplete="organization" placeholder="Votre société"></label>
+        ${err ? `<p class="err">${esc(err)}</p>` : ''}
+        <button class="btn big" type="submit">Je confirme ma présence</button>
+      </form>
+    </section>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    e.target.querySelector('button').disabled = true;
+    try {
+      const r = await api('/api/join', { name: fd.get('name'), company: fd.get('company') });
+      token = r.token; try { localStorage.setItem(TK, token); } catch {}
+      if (navigator.vibrate) navigator.vibrate(30);
+      refresh();
+    } catch (er) { renderJoin(s, er.message); }
+  };
+}
+
+function renderWaiting(s) {
+  app.innerHTML = header(s) + `
+    <section class="card hero center">
+      <div class="check">✓</div>
+      <h1>C'est noté, ${esc(s.name.split(' ')[0])}&nbsp;!</h1>
+      <p class="lead">Votre présence est confirmée. Votre parcours s'affichera ici dès que Jeff aura clôturé les inscriptions.</p>
+      <p class="muted pulse">Gardez cette page ouverte</p>
+    </section>
+    <p class="foot"><button class="link" id="notme">Ce n'est pas moi</button></p>`;
+  $('#notme').onclick = forget;
+}
+
+function fmt(ms) { ms = Math.max(0, ms); const m = Math.floor(ms / 60000), s = Math.floor(ms / 1000) % 60; return `${m}:${String(s).padStart(2, '0')}`; }
+
+function renderPlan(s) {
+  const cr = s.currentRound, plan = s.plan, R = s.rounds;
+  if (!s.active && cr > 0) {
+    app.innerHTML = header(s) + `<section class="card hero center"><h1>Vous êtes noté·e absent·e</h1><p class="lead">Si vous êtes bien là, signalez-vous à Jeff : il vous réintègre en un clic.</p></section>`;
+    return;
+  }
+  let main;
+  if (s.status === 'done' || cr > R) {
+    main = `<section class="now done"><div class="lbl">C'est terminé</div><div class="sub">Merci pour votre participation&nbsp;!</div></section>`;
+  } else if (cr === 0) {
+    const t = plan[0];
+    main = `<section class="now ready"><div class="lbl">Premier tour</div><div class="tbl"><small>Table</small>${t ?? '–'}</div><div class="sub">Installez-vous dès que Jeff lance le tour&nbsp;1.</div></section>`;
+  } else {
+    const t = plan[cr - 1], next = cr < R ? plan[cr] : null;
+    main = `<section class="now">
+      <div class="lbl">Tour ${cr} <span>/ ${R}</span></div>
+      <div class="tbl"><small>Table</small>${t ?? '–'}</div>
+      <div class="timer" id="timer"></div>
+      ${s.mates && s.mates.length ? `<div class="mates"><b>Avec vous&nbsp;:</b> ${s.mates.map(esc).join(', ')}</div>` : ''}
+      ${next != null ? `<div class="next">Tour suivant&nbsp;: <b>table ${next}</b></div>` : cr === R ? `<div class="next">Dernier tour</div>` : ''}
+    </section>`;
+  }
+  const rows = plan.map((t, i) => {
+    const n = i + 1, cls = cr === 0 ? '' : n < cr ? 'past' : n === cr ? 'cur' : '';
+    return `<li class="${cls}"><span>Tour ${n}</span><b>${t == null ? '—' : 'Table ' + t}</b></li>`;
+  }).join('');
+  app.innerHTML = header(s) + main + `
+    <section class="card"><h2>Mon parcours</h2><ol class="route">${rows}</ol>
+    <p class="muted small">Toutes les ${s.minutes} minutes, Jeff annonce le changement : regardez votre téléphone et rejoignez la table suivante.</p></section>`;
+  tick();
+}
+
+function tick() {
+  clearInterval(timerId);
+  const el = $('#timer'); if (!el || !last || !last.roundStartedAt) return;
+  const up = () => {
+    const left = last.roundStartedAt + last.minutes * 60000 - (Date.now() + offset);
+    el.textContent = left > 0 ? fmt(left) + ' restantes' : 'Changement imminent…';
+    el.classList.toggle('late', left <= 60000);
+  };
+  up(); timerId = setInterval(up, 1000);
+}
+
+function flash() {
+  document.body.classList.remove('flash'); void document.body.offsetWidth; document.body.classList.add('flash');
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+}
+
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && !wake && document.visibilityState === 'visible') { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => wake = null); } } catch {}
+}
+
+function forget() { try { localStorage.removeItem(TK); } catch {} token = null; refresh(); }
+
+async function refresh() {
+  try {
+    const s = await api('/api/me' + (token ? '?t=' + encodeURIComponent(token) : ''));
+    offset = s.now - Date.now();
+    if (token && !s.known) { token = null; try { localStorage.removeItem(TK); } catch {} }
+    const sig = JSON.stringify([s.status, s.currentRound, s.roundStartedAt, s.plan, s.active, s.mates, s.reopened, s.known]);
+    if (lastRound !== null && s.currentRound !== lastRound) flash();
+    lastRound = s.currentRound;
+    const changed = !last || sig !== last._sig;
+    s._sig = sig; last = s;
+    if (!changed && app.querySelector('form')) return;  // ne pas effacer la saisie en cours
+    if (!changed) return;
+    if (!s.known) renderJoin(s);
+    else if (!s.plan) renderWaiting(s);
+    else { renderPlan(s); keepAwake(); }
+    $('.offline')?.remove();
+  } catch {
+    if (!$('.offline')) app.insertAdjacentHTML('afterbegin', '<div class="offline">Connexion perdue — nouvel essai…</div>');
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refresh(); keepAwake(); } });
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

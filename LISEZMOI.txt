@@ -1,0 +1,27 @@
+MISSION 007 — Café 100 % Pro Bayonne
+====================================
+
+LE PRINCIPE
+On scanne le QR code → « J'accepte la mission » → « Salut à toi, agent 013 »
+et le plan complet des 8 tours s'affiche immédiatement. Rien d'autre à faire.
+64 agents, 16 tables de 4. Jeff (maître du jeu) joue l'agent 007 : son lien personnel est visukraft.fr/?007.
+Les scans donnent 001 à 006 puis 008 à 064 (63 places).
+Chaque agent rencontre 24 personnes différentes : aucun doublon, jamais deux fois la même table.
+
+MISE EN LIGNE SUR HOSTINGER
+1. hPanel → Sites web → visukraft.fr → Gestionnaire de fichiers.
+2. Dans public_html, créer un dossier « mission007 », y déposer le zip, clic droit → Extraire.
+3. Ouvrir config.php et remplacer jeff2026 par un code secret.
+
+ADRESSES
+- QR code à projeter :  https://visukraft.fr/mission007/jeff.html
+- Page des participants : https://visukraft.fr/mission007/   (c'est l'adresse du QR code)
+
+AVANT L'ÉVÉNEMENT
+Si vous avez fait des essais : ouvrir jeff.html → « Espace Jeff » → code → « Remettre le compteur à zéro ».
+Le prochain scan sera de nouveau l'agent 001. La remise à zéro efface aussi
+automatiquement les numéros gardés par les téléphones de test.
+
+FICHIERS
+index.html (participants) · jeff.html (QR code à projeter) · plan.js (les 64 parcours)
+api.php (distribue les matricules) · config.php (code) · data/ (compteur, protégé)

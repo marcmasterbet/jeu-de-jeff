@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#b8202a">
+<title>Mission 007 · Café 100 % Pro</title>
+<link rel="icon" href="logo-carre.jpg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="p">
+<main id="app" class="wrap"><div class="loading">Chargement…</div></main>
+<script src="plan.js"></script>
+<script src="missions.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const EVENT = 'Café 100 % Pro Bayonne', DATE = 'Jeudi 12 novembre 2026';
+const agent = n => String(n).padStart(3, '0');
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+  clear: () => { try { ['m007_token', 'm007_num', 'm007_epoch', 'm007_tour'].forEach(k => localStorage.removeItem(k)); } catch {} } };
+
+const header = num => `<header class="top"><img class="logo" src="logo-carre.jpg" alt="Café 100 % Pro">
+  <div class="ev"><b>${EVENT}</b><span>${DATE}</span></div>${num ? `<span class="who">Agent ${agent(num)}</span>` : ''}</header>`;
+const jeff = txt => `<div class="jeff"><img src="jeff.jpg" alt="Jeff"><p>${txt}</p></div>`;
+
+// ----- accueil -----
+function renderWelcome(err) {
+  app.innerHTML = header() + `
+    <section class="intro mission">
+      <p class="kicker">Mission 007</p>
+      <h1>8 tours. 24 contacts.<br><em>Zéro doublon.</em></h1>
+      <p class="lead">Votre mission, si vous l’acceptez&nbsp;: rencontrer jusqu’à 24 entrepreneurs en moins de 2&nbsp;heures, sans jamais croiser deux fois la même personne.</p>
+      <p class="aside"><em>Impossible&nbsp;? C’est bien ce qu’on pourrait croire.</em></p>
+      <p class="lead">Aucun plan. Aucune consigne. Vous êtes seul face à votre mission.</p>
+      <p class="lead">Votre seul indice&nbsp;: <b class="code">007</b>.</p>
+    </section>
+    <section class="card hero center">
+      ${jeff('L’agent Jeff Bond vous attend à l’accueil.<br><em>Bonne chance. Vous allez en avoir besoin.</em>')}
+      ${err ? `<p class="err">${err}</p>` : ''}
+      <button class="btn big" id="go">J’accepte la mission</button>
+    </section>
+    <p class="foot"><button class="link" id="rec">J'ai déjà un matricule d'agent</button></p>`;
+  $('#go').onclick = async e => {
+    e.target.disabled = true; e.target.textContent = 'Transmission en cours…';
+    try {
+      const r = await fetch('api.php?a=join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const j = await r.json();
+      if (j.full) return renderWelcome('Toutes les places de la mission sont attribuées. Venez voir Jeff à l’accueil.');
+      if (!j.num) throw new Error(j.error || 'Erreur');
+      store.set('m007_token', j.token); store.set('m007_num', j.num); store.set('m007_epoch', j.epoch || ''); store.set('m007_tour', '1');
+      if (navigator.vibrate) navigator.vibrate(60);
+      renderPlan(j.num, true);
+    } catch { renderWelcome('Pas de connexion. Vérifiez votre réseau et réessayez.'); }
+  };
+  $('#rec').onclick = renderRecover;
+}
+
+// ----- retrouver son plan (aucune connexion nécessaire) -----
+function renderRecover(err) {
+  app.innerHTML = header() + `
+    <section class="card hero">
+      <h1>Retrouver ma mission</h1>
+      <p class="lead">Saisissez votre matricule d'agent (par exemple 013).</p>
+      <form id="rf"><label>Mon matricule<input name="num" type="number" inputmode="numeric" min="1" max="${PLAN.length}" required placeholder="013"></label>
+      ${err ? `<p class="err">${err}</p>` : ''}<button class="btn big">Afficher mes tables</button></form>
+    </section><p class="foot"><button class="link" id="back">Retour</button></p>`;
+  $('#back').onclick = () => renderWelcome();
+  $('#rf').onsubmit = e => {
+    e.preventDefault();
+    const n = +new FormData(e.target).get('num');
+    if (!(n >= 1 && n <= PLAN.length)) return renderRecover('Matricule inconnu.');
+    store.set('m007_num', n); store.set('m007_token', ''); store.set('m007_tour', '1');
+    fetch('api.php?a=check', { cache: 'no-store' }).then(r => r.json()).then(j => store.set('m007_epoch', j.epoch || '')).catch(() => {});
+    renderPlan(n);
+  };
+}
+
+// ----- le plan de table complet -----
+function renderPlan(num, fresh) {
+  const tables = PLAN[num - 1];
+  let cur = +store.get('m007_tour') || 1;
+  const draw = () => {
+    app.innerHTML = header(num) + `
+      <section class="now ready">
+        <div class="hello">${num === 7 ? 'Bonjour, <b>maître du jeu</b>&nbsp;🍸' : `Salut à toi, <b>agent ${agent(num)}</b>`}</div>
+        <div class="lbl">${num === 7 ? 'Agent 007 · votre ordre de mission.' : 'Voici votre ordre de mission.'}</div>
+        <div class="tbl"><small>Tour ${cur} · table</small>${tables[cur - 1]}</div>
+        <div class="sub">À chaque signal de Jeff, passez à la table du tour suivant.</div>
+        ${MISSIONS[tables[cur - 1]] ? `<div class="mission-now">Mission ${tables[cur - 1]} : <b>${MISSIONS[tables[cur - 1]].titre}</b><span>Consignes complètes ci-dessous ↓</span></div>` : ''}
+      </section>
+      ${missionHTML(tables[cur - 1])}
+      <section class="card">
+        <h2>Mes 8 tables</h2>
+        <ol class="tgrid8">${tables.map((t, i) => `<li class="${i + 1 === cur ? 'cur' : i + 1 < cur ? 'past' : ''}" data-t="${i + 1}"><small>Tour ${i + 1}</small><b>${t}</b><small>table</small>${MISSIONS[t] ? `<span class="mission-mini">Mission ${t}</span>` : ''}</li>`).join('')}</ol>
+        <p class="muted small">Touchez un tour pour l'afficher en grand. 24 rencontres, aucune personne croisée deux fois.</p>
+      </section>
+      <section class="card">${jeff(num === 7 ? 'Votre lien personnel de maître du jeu&nbsp;: <b>visukraft.fr/?007</b>. Ajoutez-le à l’écran d’accueil de votre téléphone.' : `Notez votre matricule&nbsp;: <b>${agent(num)}</b>. Si vous fermez la page, rescannez le QR code → « J'ai déjà un matricule ».`)}</section>`;
+    document.querySelectorAll('.tgrid8 li').forEach(li => li.onclick = () => { cur = +li.dataset.t; store.set('m007_tour', cur); draw(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  };
+  draw();
+}
+
+// au chargement : si ce téléphone a déjà son matricule, on affiche directement son plan
+// … sauf si Jeff a remis le compteur à zéro depuis : le téléphone oublie alors son ancien numéro.
+// Lien personnel de Jeff : visukraft.fr/?007 affiche toujours le parcours de l'agent 007.
+if (/007/.test(location.search)) { renderPlan(7); }
+else {
+const saved = +store.get('m007_num');
+if (saved >= 1 && saved <= PLAN.length) {
+  renderPlan(saved);                                   // affichage immédiat, même sans réseau
+  fetch('api.php?a=check&t=' + encodeURIComponent(store.get('m007_token') || ''), { cache: 'no-store' })
+    .then(r => r.json()).then(j => {
+      const mine = store.get('m007_epoch'), tok = store.get('m007_token');
+      const reset = (mine && j.epoch && mine !== j.epoch) || (tok && !j.valid);
+      if (reset) { store.clear(); renderWelcome(); }
+    }).catch(() => {});                                 // pas de réseau : on garde le plan affiché
+} else renderWelcome();
+}
+</script>
+</body>
+</html>

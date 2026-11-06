@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mission 007 · QR code</title>
+<link rel="icon" href="logo-carre.jpg">
+<link rel="stylesheet" href="style.css">
+<script src="qrcode.js"></script>
+<style>
+  body{display:flex;min-height:100vh;align-items:center;justify-content:center}
+  .screen{display:flex;gap:48px;align-items:center;flex-wrap:wrap;justify-content:center;padding:24px}
+  .side{max-width:420px}
+  .side h1{font-family:var(--serif);font-size:44px;line-height:1.05;margin:10px 0 14px}
+  .side h1 em{color:var(--acc);font-weight:400}
+  .tools{margin-top:28px;font-size:14px}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="qrbox">
+    <div class="qrhead"><img src="logo-carre.jpg" alt=""><div><b>Café 100 % Pro Bayonne</b><span class="muted">Jeudi 12 novembre 2026</span></div></div>
+    <div id="qr"></div>
+    <div class="jeffcall"><img src="jeff.jpg" alt=""><b>Scannez pour recevoir votre mission</b></div>
+  </div>
+  <div class="side">
+    <span class="kicker" style="display:inline-block;font-weight:800;letter-spacing:.3em;font-size:12px;color:#fff;background:var(--ink);padding:6px 12px;border-radius:4px">MISSION 007</span>
+    <h1>8 tours. 24 contacts.<br><em>Zéro doublon.</em></h1>
+    <div class="bigcount"><b id="count">–</b><span>agents arrivés sur 63 · + Jeff, agent 007</span></div>
+    <div class="tools" id="tools">
+      <button class="btn ghost sm" id="login">Espace Jeff</button>
+    </div>
+  </div>
+</div>
+<script>
+const url = new URL('./', location.href).href;
+const q = qrcode(0, 'M'); q.addData(url); q.make();
+// taille fixée en CSS (jamais calculée au chargement) : le QR s'affiche quelle que soit la fenêtre
+document.getElementById('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 16, scalable: true });
+const svg = document.querySelector('#qr svg');
+svg.removeAttribute('width'); svg.removeAttribute('height');
+svg.style.cssText = 'display:block;width:min(380px,70vw,60vh);height:auto;aspect-ratio:1;margin:0 auto';
+
+let code = null; try { code = localStorage.getItem('m007_admin'); } catch {}
+async function call(body) {
+  const r = await fetch('api.php?a=admin', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Code': code || '' }, body: JSON.stringify(body || {}) });
+  return r.ok ? r.json() : null;
+}
+async function refresh() {
+  if (!code) return;
+  const d = await call(); if (!d) { code = null; return showLogin(); }
+  document.getElementById('count').textContent = d.count;
+  document.getElementById('tools').innerHTML = `<button class="btn ghost sm" id="reset">Remettre le compteur à zéro</button>
+    <p class="muted">${d.writable ? '✅ Le serveur enregistre bien les agents.' : '❌ Le dossier « data » n’est pas accessible en écriture.'}<br>${d.next ? 'Agent suivant : ' + String(d.next).padStart(3, '0') : 'Mission complète'}<br>Votre parcours (agent 007) : <a href="./?007">visukraft.fr/?007</a></p>`;
+  document.getElementById('reset').onclick = async () => { if (confirm('Remettre le compteur à zéro ? Le prochain scan sera l’agent 001 (le 007 reste à Jeff). À faire avant l’événement, pas pendant.')) { await call({ action: 'reset' }); refresh(); } };
+}
+function showLogin() {
+  document.getElementById('tools').innerHTML = `<button class="btn ghost sm" id="login">Espace Jeff</button>`;
+  document.getElementById('login').onclick = () => { code = prompt('Code d’accès de Jeff'); try { localStorage.setItem('m007_admin', code); } catch {} refresh(); };
+}
+showLogin(); refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>
